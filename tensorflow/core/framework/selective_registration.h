@@ -1,4 +1,4 @@
-/* Copyright 2016 Google Inc. All Rights Reserved.
+/* Copyright 2016 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -31,25 +31,28 @@ limitations under the License.
 //    functions should be defined as valid constexpr functions, so that they are
 //    evaluated at compile time: this is needed to make symbols referenced by
 //    un-registered objects unused, and therefore allow the linker to strip them
-//    out.
+//    out.  See tools/print_required_ops/print_selective_registration_header.py
+//    for a tool that can be used to generate ops_to_register.h.
+//
+// ops_to_register.h should define macros for:
+//   // Ops for which this is false will not be registered.
+//   SHOULD_REGISTER_OP(op)
+//   // If this is false, then no gradient ops are registered.
+//   SHOULD_REGISTER_OP_GRADIENT
+//   // Op kernel classes where this is false won't be registered.
+//   SHOULD_REGISTER_OP_KERNEL(clz)
+// The macros should be defined using constexprs.
+
 #include "ops_to_register.h"
 
-// Files which are not included in the whitelist provided by this
-// graph-specific header file will not be allowed to register their
-// operator kernels.
-#define SHOULD_REGISTER_OP_KERNEL(filename) \
-  (strstr(kNecessaryOpFiles, filename) != nullptr)
-
-// Ops for which ShouldRegisterOp return false will no be registered.
-#define SHOULD_REGISTER_OP(op) ShouldRegisterOp(op)
-
-// If kRequiresSymbolicGradients is false, then no gradient ops are registered.
-#define SHOULD_REGISTER_OP_GRADIENT kRequiresSymbolicGradients
-
+#if (!defined(SHOULD_REGISTER_OP) || !defined(SHOULD_REGISTER_OP_GRADIENT) || \
+     !defined(SHOULD_REGISTER_OP_KERNEL))
+static_assert(false, "ops_to_register.h must define SHOULD_REGISTER macros");
+#endif
 #else
-#define SHOULD_REGISTER_OP_KERNEL(filename) true
 #define SHOULD_REGISTER_OP(op) true
 #define SHOULD_REGISTER_OP_GRADIENT true
+#define SHOULD_REGISTER_OP_KERNEL(clz) true
 #endif
 
 #endif  // TENSORFLOW_FRAMEWORK_SELECTIVE_REGISTRATION_H_

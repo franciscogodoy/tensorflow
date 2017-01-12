@@ -1,4 +1,4 @@
-# Copyright 2015 Google Inc. All Rights Reserved.
+# Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,26 +25,26 @@ import functools
 import os
 import threading
 import time
+import re
 
 import six
 from six.moves import BaseHTTPServer
 from six.moves import socketserver
 
-from tensorflow.python.platform import logging
+from tensorflow.python.platform import tf_logging as logging
 from tensorflow.python.summary import event_accumulator
-from tensorflow.python.summary.impl import gcs
+from tensorflow.python.summary.impl import io_wrapper
 from tensorflow.tensorboard.backend import handler
+from tensorflow.tensorboard.plugins.projector import plugin as projector_plugin
 
 # How many elements to store per tag, by tag type
 TENSORBOARD_SIZE_GUIDANCE = {
     event_accumulator.COMPRESSED_HISTOGRAMS: 500,
     event_accumulator.IMAGES: 4,
+    event_accumulator.AUDIO: 4,
     event_accumulator.SCALARS: 1000,
-    event_accumulator.HISTOGRAMS: 1,
+    event_accumulator.HISTOGRAMS: 50,
 }
-
-# How often to reload new data after the latest load (secs)
-LOAD_INTERVAL = 60
 
 
 def ParseEventFilesSpec(logdir):
@@ -69,24 +69,21 @@ def ParseEventFilesSpec(logdir):
   files = {}
   if logdir is None:
     return files
+  # Make sure keeping consistent with ParseURI in core/lib/io/path.cc
+  uri_pattern = re.compile("[a-zA-Z][0-9a-zA-Z.]*://.*")
   for specification in logdir.split(','):
-    # If it's a gcs path, don't split on colon
-    if gcs.IsGCSPath(specification):
-      run_name = None
-      path = specification
-    # If the spec looks like /foo:bar/baz, then we assume it's a path with a
-    # colon.
-    elif ':' in specification and specification[0] != '/':
+    # Check if the spec contains group. A spec start with xyz:// is regarded as
+    # URI path spec instead of group spec. If the spec looks like /foo:bar/baz,
+    # then we assume it's a path with a colon.
+    if uri_pattern.match(specification) is None and \
+       ':' in specification and specification[0] != '/':
       # We split at most once so run_name:/path:with/a/colon will work.
       run_name, _, path = specification.partition(':')
     else:
       run_name = None
       path = specification
-
-    if not os.path.isabs(path) and not gcs.IsGCSPath(path):
-      # Create absolute path out of relative one.
-      path = os.path.join(os.path.realpath('.'), path)
-
+    if uri_pattern.match(path) is None:
+      path = os.path.realpath(path)
     files[path] = run_name
   return files
 
@@ -100,16 +97,16 @@ def ReloadMultiplexer(multiplexer, path_to_run):
       name is interpreted as a run name equal to the path.
   """
   start = time.time()
+  logging.info('TensorBoard reload process beginning')
   for (path, name) in six.iteritems(path_to_run):
     multiplexer.AddRunsFromDirectory(path, name)
+  logging.info('TensorBoard reload process: Reload the whole Multiplexer')
   multiplexer.Reload()
   duration = time.time() - start
-  logging.info('Multiplexer done loading. Load took %0.1f secs', duration)
+  logging.info('TensorBoard done reloading. Load took %0.3f secs', duration)
 
 
-def StartMultiplexerReloadingThread(multiplexer,
-                                    path_to_run,
-                                    load_interval=LOAD_INTERVAL):
+def StartMultiplexerReloadingThread(multiplexer, path_to_run, load_interval):
   """Starts a thread to automatically reload the given multiplexer.
 
   The thread will reload the multiplexer by calling `ReloadMultiplexer` every
@@ -124,20 +121,9 @@ def StartMultiplexerReloadingThread(multiplexer,
 
   Returns:
     A started `threading.Thread` that reloads the multiplexer.
-
   """
-  # Ensure the Multiplexer initializes in a loaded state before it adds runs
-  # So it can handle HTTP requests while runs are loading
-  multiplexer.Reload()
-
-  for path in path_to_run.keys():
-    if gcs.IsGCSPath(path):
-      gcs.CheckIsSupported()
-      logging.info(
-          'Assuming %s is intended to be a Google Cloud Storage path because '
-          'it starts with %s. If it isn\'t, prefix it with \'/.\' (i.e., use '
-          '/.%s instead)', path, gcs.PATH_PREFIX, path)
-
+  # We don't call multiplexer.Reload() here because that would make
+  # AddRunsFromDirectory block until the runs have all loaded.
   def _ReloadForever():
     while True:
       ReloadMultiplexer(multiplexer, path_to_run)
@@ -152,10 +138,10 @@ def StartMultiplexerReloadingThread(multiplexer,
 class ThreadedHTTPServer(socketserver.ThreadingMixIn,
                          BaseHTTPServer.HTTPServer):
   """A threaded HTTP server."""
-  daemon = True
+  daemon_threads = True
 
 
-def BuildServer(multiplexer, host, port):
+def BuildServer(multiplexer, host, port, logdir):
   """Sets up an HTTP server for running TensorBoard.
 
   Args:
@@ -163,9 +149,11 @@ def BuildServer(multiplexer, host, port):
       information about events.
     host: The host name.
     port: The port number to bind to, or 0 to pick one automatically.
-
+    logdir: The logdir argument string that tensorboard started up with.
   Returns:
     A `BaseHTTPServer.HTTPServer`.
   """
-  factory = functools.partial(handler.TensorboardHandler, multiplexer)
+  names_to_plugins = {'projector': projector_plugin.ProjectorPlugin()}
+  factory = functools.partial(handler.TensorboardHandler, multiplexer,
+                              names_to_plugins, logdir)
   return ThreadedHTTPServer((host, port), factory)

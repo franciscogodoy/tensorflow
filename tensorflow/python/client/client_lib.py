@@ -1,4 +1,4 @@
-# Copyright 2015 Google Inc. All Rights Reserved.
+# Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,6 @@
 # limitations under the License.
 # ==============================================================================
 
-# pylint: disable=unused-import
 """This library contains classes for launching graphs and executing operations.
 
 The [basic usage](../../get_started/index.md#basic-usage) guide has
@@ -26,7 +25,7 @@ examples of how a graph is launched in a [`tf.Session`](#Session).
 
 @@get_default_session
 
-## Error classes
+## Error classes and convenience functions
 
 @@OpError
 @@CancelledError
@@ -45,20 +44,17 @@ examples of how a graph is launched in a [`tf.Session`](#Session).
 @@InternalError
 @@UnavailableError
 @@DataLossError
+
+@@exception_type_from_error_code
+@@error_code_from_exception_type
+@@raise_exception_on_not_ok_status
 """
 
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-# NOTE(mrry): Support for `tf.GrpcServer` is currently experimental.
-from tensorflow.core.protobuf.tensorflow_server_pb2 import ClusterDef
-from tensorflow.core.protobuf.tensorflow_server_pb2 import JobDef
-from tensorflow.core.protobuf.tensorflow_server_pb2 import ServerDef
-from tensorflow.python.client.server_lib import GrpcServer
-from tensorflow.python.client.server_lib import make_cluster_def
-
-
+# pylint: disable=unused-import
 from tensorflow.python.client.session import InteractiveSession
 from tensorflow.python.client.session import Session
 

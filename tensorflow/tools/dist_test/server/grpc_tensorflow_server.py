@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright 2016 Google Inc. All Rights Reserved.
+# Copyright 2016 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
-
 """Python-based TensorFlow GRPC server.
 
 Takes input arguments cluster_spec, job_name and task_id, and start a blocking
@@ -30,27 +29,27 @@ Where:
     PORT is a port number
 """
 
-
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import tensorflow as tf
+from tensorflow.core.protobuf import tensorflow_server_pb2
+from tensorflow.python.platform import app
+from tensorflow.python.platform import flags
+from tensorflow.python.training import server_lib
 
+FLAGS = flags.FLAGS
 
-FLAGS = tf.app.flags.FLAGS
-
-tf.app.flags.DEFINE_string("cluster_spec", "",
-                           """Cluster spec: SPEC.
+flags.DEFINE_string("cluster_spec", "", """Cluster spec: SPEC.
     SPEC is <JOB>(,<JOB>)*,"
     JOB  is <NAME>|<HOST:PORT>(;<HOST:PORT>)*,"
     NAME is a valid job name ([a-z][0-9a-z]*),"
     HOST is a hostname or IP address,"
     PORT is a port number."
 E.g., local|localhost:2222;localhost:2223, ps|ps0:2222;ps1:2222""")
-tf.app.flags.DEFINE_string("job_name", "", "Job name: e.g., local")
-tf.app.flags.DEFINE_integer("task_id", 0, "Task index, e.g., 0")
-tf.app.flags.DEFINE_boolean("verbose", False, "Verbose mode")
+flags.DEFINE_string("job_name", "", "Job name: e.g., local")
+flags.DEFINE_integer("task_id", 0, "Task index, e.g., 0")
+flags.DEFINE_boolean("verbose", False, "Verbose mode")
 
 
 def parse_cluster_spec(cluster_spec, cluster):
@@ -66,6 +65,9 @@ def parse_cluster_spec(cluster_spec, cluster):
   """
 
   job_strings = cluster_spec.split(",")
+
+  if not cluster_spec:
+    raise ValueError("Empty cluster_spec string")
 
   for job_string in job_strings:
     job_def = cluster.job.add()
@@ -86,7 +88,7 @@ def parse_cluster_spec(cluster_spec, cluster):
     job_tasks = job_string.split("|")[1].split(";")
     for i in range(len(job_tasks)):
       if not job_tasks[i]:
-        raise ValueError("Empty job_task string at position %d" % i)
+        raise ValueError("Empty task string at position %d" % i)
 
       job_def.tasks[i] = job_tasks[i]
 
@@ -96,7 +98,7 @@ def parse_cluster_spec(cluster_spec, cluster):
 
 def main(unused_args):
   # Create Protobuf ServerDef
-  server_def = tf.ServerDef(protocol="grpc")
+  server_def = tensorflow_server_pb2.ServerDef(protocol="grpc")
 
   # Cluster info
   parse_cluster_spec(FLAGS.cluster_spec, server_def.cluster)
@@ -111,12 +113,12 @@ def main(unused_args):
     raise ValueError("Invalid task_id: %d" % FLAGS.task_id)
   server_def.task_index = FLAGS.task_id
 
-  # Create GrpcServer instance
-  server = tf.GrpcServer(server_def)
+  # Create GRPC Server instance
+  server = server_lib.Server(server_def)
 
   # join() is blocking, unlike start()
   server.join()
 
 
 if __name__ == "__main__":
-  tf.app.run()
+  app.run()

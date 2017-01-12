@@ -12,11 +12,11 @@ py_library(
     srcs = ["handler.py"],
     srcs_version = "PY2AND3",
     deps = [
-        ":float_wrapper",
         ":process_graph",
         "//tensorflow/python:platform",
         "//tensorflow/python:summary",
-        "//tensorflow/python:util",
+        "//tensorflow/tensorboard/lib/python:http",
+        "@six_archive//:six",
     ],
 )
 
@@ -35,26 +35,8 @@ py_library(
     name = "process_graph",
     srcs = ["process_graph.py"],
     srcs_version = "PY2AND3",
-    # Used by mldash and potentially other projects
     visibility = ["//visibility:public"],
-    deps = [],
-)
-
-py_library(
-    name = "float_wrapper",
-    srcs = ["float_wrapper.py"],
-    srcs_version = "PY2AND3",
-)
-
-py_test(
-    name = "float_wrapper_test",
-    size = "small",
-    srcs = ["float_wrapper_test.py"],
-    srcs_version = "PY2AND3",
-    deps = [
-        ":float_wrapper",
-        "//tensorflow/python:platform_test",
-    ],
+    deps = ["//tensorflow/python:util"],
 )
 
 py_library(
@@ -65,6 +47,8 @@ py_library(
         ":handler",
         "//tensorflow/python:platform",
         "//tensorflow/python:summary",
+        "//tensorflow/tensorboard:projector",
+        "@six_archive//:six",
     ],
 )
 
@@ -76,8 +60,18 @@ py_test(
     srcs_version = "PY2AND3",
     deps = [
         ":server",
-        "//tensorflow:tensorflow_py",
+        "//tensorflow/core:protos_all_py",
+        "//tensorflow/python:client",
+        "//tensorflow/python:client_testlib",
+        "//tensorflow/python:framework_for_generated_wrappers",
+        "//tensorflow/python:init_ops",
+        "//tensorflow/python:platform",
         "//tensorflow/python:summary",
+        "//tensorflow/python:training",
+        "//tensorflow/python:variable_scope",
+        "//tensorflow/python:variables",
+        "//tensorflow/tensorboard:projector",
+        "//third_party/py/numpy",
     ],
 )
 
